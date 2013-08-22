@@ -173,12 +173,12 @@ def channel_color(t, coord, ii, n_pixels, random_value, accum):
 
 def distance(x1, y1, x2, y2):
     v = (x2 - x1, y2 - y1)
-    #return math.sqrt(v[0] * v[0] + v[1] * v[1])
-    return v[0] * v[0] + v[1] * v[1]
+    return math.sqrt(v[0] * v[0] + v[1] * v[1])
+    #return v[0] * v[0] + v[1] * v[1]
 
 def plasma(t, accum, x, y):
     phase = accum
-    stretch = 0.008 + (math.sin(t/10) + 1.0) * 1.0
+    stretch = 0.008 + (math.sin(t/20 * TF) ** 3 + 1.0) * 3.6
     p1 = ((math.sin(phase * 1.000) + 0.0) * 2.0, (math.sin(phase * 1.310) + 0.0) * 2.0)
     p2 = ((math.sin(phase * 1.770) + 0.0) * 2.0, (math.sin(phase * 2.865) + 0.0) * 2.0)
     d1 = distance(p1[0], p1[1], x, y)
