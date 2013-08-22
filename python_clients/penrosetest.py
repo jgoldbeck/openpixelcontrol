@@ -55,26 +55,26 @@ def computeRegion(cube, channel, ledindex):
     regionmap = {
         (0,0): [ (30, "off"), (60, "off"), (90, "C"), (999, "C") ],
         (0,1): [ (30, "BC"), (60, "B"), (90, "off"), (999, "off") ],
-        (0,2): "A",
+        (0,2): "AB",
         (0,3): "off",
-        (0,4): "AB",
-        (0,5): "off",
+        (0,4): [ (86, "A"), (999, "off") ],
+        (0,5): [ (86, "off"), (999, "off") ],
         (0,6): "B",
         (0,7): "off",
         (1,0): [ (30, "off"), (60, "off"), (90, "A"), (999, "A") ],
         (1,1): [ (30, "AC"), (60, "C"), (90, "off"), (999, "off") ],
-        (1,2): "B",
+        (1,2): "BC",
         (1,3): "off",
-        (1,4): "BC",
-        (1,5): "off",
+        (1,4): [ (86, "B"), (999, "off") ],
+        (1,5): [ (86, "off"), (999, "off") ],
         (1,6): "C",
         (1,7): "off",
         (2,0): [ (30, "off"), (60, "off"), (90, "B"), (999, "B") ],
         (2,1): [ (30, "AB"), (60, "A"), (90, "off"), (999, "off") ],
-        (2,2): "C",
+        (2,2): "AC",
         (2,3): "off",
-        (2,4): "AC",
-        (2,5): "off",
+        (2,4): [ (86, "C"), (999, "off") ],
+        (2,5): [ (86, "off"), (999, "off") ],
         (2,6): "A",
         (2,7): "off",
 
@@ -168,7 +168,17 @@ def distance_color(t, coord, ii, n_pixels, random_values, accum):
     return c.convert_to('rgb').get_value_tuple()
 
 def channel_color(t, coord, ii, n_pixels, random_value, accum):
-    c = HSLColor(320.0 / 8.0 * channels[ii], 0.8, 0.4)
+    hue = {
+        0: 0,   # red
+        1: 40,  # orange
+        2: 120, # green
+        3: 260, # violet
+        4: 70,  # yellow
+        5: 180, # cyan
+        6: 210, # blue
+        7: 320, # magenta
+    }[channels[ii]]
+    c = HSLColor(hue, 0.8, 0.4)
     return c.convert_to('rgb').get_value_tuple()
 
 def distance(x1, y1, x2, y2):
