@@ -118,7 +118,7 @@ print
 #-------------------------------------------------------------------------------
 # color function
 
-def pixel_color(t, coord, ii, n_pixels, random_values):
+def pixel_color(t, coord, ii, n_pixels, random_values, accum):
     """Compute the color of a given pixel.
 
     t: time in seconds since the program started.
@@ -212,7 +212,7 @@ def pixel_color(t, coord, ii, n_pixels, random_values):
     #r, g, b = color_utils.gamma((r, g, b), 2.2)
 """
 
-def test_pixel_color(t, coord, ii, n_pixels, random_values):
+def test_pixel_color(t, coord, ii, n_pixels, random_values, accum):
     return ((ii % 30) / 30.0 * 125 + color_utils.cos(t) * 130, (1 - ii / n_pixels) * 180, color_utils.cos(t*0.1) * 255)
 
 def quadrant(radians):
@@ -228,7 +228,7 @@ def quadrant(radians):
     else:
         return -1
 
-def prism_color(t, coord, ii, n_pixels, random_values):
+def prism_color(t, coord, ii, n_pixels, random_values, accum):
     arcwidth = math.pi/12.0
     theta = (t * math.pi/16.0) % (2.0 * math.pi)
     x, y, z, = coord
@@ -256,29 +256,51 @@ def prism_color(t, coord, ii, n_pixels, random_values):
     else:
         return (240, 240, 240)
 
-def distance_color(t, coord, ii, n_pixels, random_values):
+def distance_color(t, coord, ii, n_pixels, random_values, accum):
     x, y, z, = coord
     dist = math.sqrt(x * x + y * y + z * z)
     maxdist = 8.0
     c = HSLColor(360.0 * (t % 20)/20.0, 1.0, dist/maxdist)
     return c.convert_to('rgb').get_value_tuple()
 
-def channel_color(t, coord, ii, n_pixels, random_value):
+def channel_color(t, coord, ii, n_pixels, random_value, accum):
     c = HSLColor(320.0 / 8.0 * channels[ii], 0.8, 0.4)
     return c.convert_to('rgb').get_value_tuple()
 
-def region_color(t, coord, ii, n_pixels, random_value):
+def distance(x1, y1, x2, y2):
+    v = (x2 - x1, y2 - y1)
+    #return math.sqrt(v[0] * v[0] + v[1] * v[1])
+    return v[0] * v[0] + v[1] * v[1]
+
+def plasma(t, accum, x, y):
+    phase = accum
+    stretch = 0.008 + (math.sin(t/10) + 1.0) * 1.0
+    p1 = ((math.sin(phase * 1.000) + 0.0) * 2.0, (math.sin(phase * 1.310) + 0.0) * 2.0)
+    p2 = ((math.sin(phase * 1.770) + 0.0) * 2.0, (math.sin(phase * 2.865) + 0.0) * 2.0)
+    d1 = distance(p1[0], p1[1], x, y)
+    d2 = distance(p2[0], p2[1], x, y)
+    f = (math.sin(d1 * d2 * stretch) + 1.0) * 0.5
+    return f * f
+
+# time factor to speed up certain aspects of the animation during debugging
+TF = 1 # /30
+
+def region_color(t, coord, ii, n_pixels, random_value, accum):
     c = {
         'A': (0, 1.0, 0.5),
-        'AB': (30, 1.0, 0.5),
-        'B': (60, 1.0, 0.5),
-        'BC': (90, 1.0, 0.5),
-        'C': (120, 1.0, 0.5),
-        'AC': (150, 1.0, 0.5),
+        'AB': (20, 1.0, 0.5),
+        'B': (40, 1.0, 0.5),
+        'BC': (60, 1.0, 0.5),
+        'C': (80, 1.0, 0.5),
+        'AC': (100, 1.0, 0.5),
         'off': (0, 0, 0),
     }.get(regions[ii], (0, 0.3, 0.6))
 
-    return HSLColor(c[0], c[1], c[2]).convert_to('rgb').get_value_tuple()
+    p = plasma(t, accum, coord[0], coord[1])
+
+    return HSLColor((c[0] + t * 3 * TF) % 360, 
+                    c[1] * (0.6 + 0.4 * p),
+                    c[2] * (0.4 + 0.6 * p)).convert_to('rgb').get_value_tuple()
 
 #-------------------------------------------------------------------------------
 # send pixels
@@ -289,9 +311,11 @@ print
 n_pixels = len(coordinates)
 random_values = [random.random() for ii in range(n_pixels)]
 start_time = time.time()
+accum = 0
 while True:
     t = time.time() - start_time
-    pixels = [region_color(t*0.6, coord, ii, n_pixels, random_values) for ii, coord in enumerate(coordinates)]
+    pixels = [region_color(t*0.6, coord, ii, n_pixels, random_values, accum) for ii, coord in enumerate(coordinates)]
+    accum = accum + 0.0001 * ( 1.0 + 80.0 * math.pow(math.sin(t/10 * TF), 3.0))
     client.put_pixels(pixels, channel=0)
     time.sleep(1 / options.fps)
 
