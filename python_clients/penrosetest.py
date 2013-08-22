@@ -50,11 +50,58 @@ print
 print '    parsing layout file'
 print
 
+
+def computeRegion(cube, channel, ledindex):
+    regionmap = {
+        (0,0): [ (30, "off"), (60, "off"), (90, "C"), (999, "C") ],
+        (0,1): [ (30, "BC"), (60, "B"), (90, "off"), (999, "off") ],
+        (0,2): "A",
+        (0,3): "off",
+        (0,4): "AB",
+        (0,5): "off",
+        (0,6): "B",
+        (0,7): "off",
+        (1,0): [ (30, "off"), (60, "off"), (90, "A"), (999, "A") ],
+        (1,1): [ (30, "AC"), (60, "C"), (90, "off"), (999, "off") ],
+        (1,2): "B",
+        (1,3): "off",
+        (1,4): "BC",
+        (1,5): "off",
+        (1,6): "C",
+        (1,7): "off",
+        (2,0): [ (30, "off"), (60, "off"), (90, "B"), (999, "B") ],
+        (2,1): [ (30, "AB"), (60, "A"), (90, "off"), (999, "off") ],
+        (2,2): "C",
+        (2,3): "off",
+        (2,4): "AC",
+        (2,5): "off",
+        (2,6): "A",
+        (2,7): "off",
+
+    }
+    r = regionmap[(cube, channel)]
+    if not isinstance(r, list):
+        return r
+    else:
+        for item in r:
+            if ledindex < item[0]:
+                return item[1]
+    
+    print "error: unmapped region"
+    return "?"
+
 coordinates = []
+channels = []
+regions = []
+
 for item in json.load(open(options.layout)):
+
     if 'point' in item:
         coordinates.append(tuple(item['point']))
-
+    if 'channel' in item:
+        channels.append(item['channel'])
+        if 'cube' in item and 'ledindex' in item:
+            regions.append(computeRegion(item['cube'], item['channel'], item['ledindex']))
 
 #-------------------------------------------------------------------------------
 # connect to server
@@ -216,6 +263,23 @@ def distance_color(t, coord, ii, n_pixels, random_values):
     c = HSLColor(360.0 * (t % 20)/20.0, 1.0, dist/maxdist)
     return c.convert_to('rgb').get_value_tuple()
 
+def channel_color(t, coord, ii, n_pixels, random_value):
+    c = HSLColor(320.0 / 8.0 * channels[ii], 0.8, 0.4)
+    return c.convert_to('rgb').get_value_tuple()
+
+def region_color(t, coord, ii, n_pixels, random_value):
+    c = {
+        'A': (0, 1.0, 0.5),
+        'AB': (30, 1.0, 0.5),
+        'B': (60, 1.0, 0.5),
+        'BC': (90, 1.0, 0.5),
+        'C': (120, 1.0, 0.5),
+        'AC': (150, 1.0, 0.5),
+        'off': (0, 0, 0),
+    }.get(regions[ii], (0, 0.3, 0.6))
+
+    return HSLColor(c[0], c[1], c[2]).convert_to('rgb').get_value_tuple()
+
 #-------------------------------------------------------------------------------
 # send pixels
 
@@ -227,7 +291,7 @@ random_values = [random.random() for ii in range(n_pixels)]
 start_time = time.time()
 while True:
     t = time.time() - start_time
-    pixels = [prism_color(t*0.6, coord, ii, n_pixels, random_values) for ii, coord in enumerate(coordinates)]
+    pixels = [region_color(t*0.6, coord, ii, n_pixels, random_values) for ii, coord in enumerate(coordinates)]
     client.put_pixels(pixels, channel=0)
     time.sleep(1 / options.fps)
 
