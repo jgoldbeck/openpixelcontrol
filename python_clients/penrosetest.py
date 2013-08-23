@@ -214,12 +214,41 @@ def region_color(t, coord, ii, n_pixels, random_value, accum):
 
     return HSLColor((c[0] + t * 3 * TF) % 360, 
                     c[1] * (0.6 + 0.4 * p),
-                    c[2] * (0.4 + 0.6 * p)).convert_to('rgb').get_value_tuple()
+                    c[2] * (0.4 + 0.6 * p)
+                    ).convert_to('rgb').get_value_tuple()
 
 
     # apply gamma curve
     # only do this on live leds, not in the simulator
     #r, g, b = color_utils.gamma((r, g, b), 2.2)
+
+def mesmerize_color(t, coord, ii, n_pixels, random_value, accum):
+    if regions[ii] == "off":
+        return (0, 0, 0)
+    s = color_utils.clamp(math.sin(1.8 * math.sqrt(coord[0] ** 2 + coord[1] ** 2 + 2 * (coord[2] ** 2)) - t * 6.0) * 0.75 + 0.5, 0, 1) 
+    return HSLColor(0, 0, s).convert_to('rgb').get_value_tuple()
+
+def checker_color(t, coord, ii, n_pixels, random_value, accum):
+    if regions[ii] == "off":
+        return (0, 0, 0)
+
+    w = 1.8 + 1.2 * math.sin(t/2)
+    dx = t
+    dy = 0
+    u = ((coord[0] - dx) % w) / w
+    v = ((coord[1] - dy) % w) / w
+    h = 0 
+    if (u < 0.5) == (v < 0.5):
+        h = 45
+    tol = 0.021
+    if abs(u - 0.5) < tol or abs(v - 0.5) < tol:
+        h = 120
+
+    return HSLColor((h + t*4) % 360, 
+                    0.4 + 0.3 * u + 0.3 * math.sin(t/8), 
+                    0.5 + 0.2 * v
+                    ).convert_to('rgb').get_value_tuple()
+
 
 
 #-------------------------------------------------------------------------------
