@@ -10,6 +10,7 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License. */
 
 #include <math.h>
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,6 +106,17 @@ vector cross(vector v, vector w) {
   return result;
 }
 
+vector bounding_box[2] = { { DBL_MAX, DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX, -DBL_MAX } };
+
+void updateBBox(vector v) {
+  bounding_box[0].x = fmin(bounding_box[0].x, v.x);
+  bounding_box[0].y = fmin(bounding_box[0].y, v.y);
+  bounding_box[0].z = fmin(bounding_box[0].z, v.z);
+  bounding_box[1].x = fmax(bounding_box[1].x, v.x);
+  bounding_box[1].y = fmax(bounding_box[1].y, v.y);
+  bounding_box[1].z = fmax(bounding_box[1].z, v.z);
+}
+
 // Shapes
 typedef struct shape {
   void (*draw)(struct shape* this, GLUquadric* quad);
@@ -192,7 +204,12 @@ void update_camera() {
   glLoadIdentity();
   double camera_y = -cos(camera_elevation*M_PI/180)*camera_distance;
   double camera_z = sin(camera_elevation*M_PI/180)*camera_distance;
-  gluLookAt(0, camera_y, camera_z, /* target */ 0, 0, 0, /* up */ 0, 0, 1);
+
+  double target_x = (bounding_box[0].x + bounding_box[1].x) * 0.5; 
+  double target_y = (bounding_box[0].y + bounding_box[1].y) * 0.5; 
+  double target_z = (bounding_box[0].z + bounding_box[1].z) * 0.5; 
+
+  gluLookAt(0, camera_y, camera_z, target_x, target_y, target_z, /* up */ 0, 0, 1);
   glRotatef(orbit_angle, 0, 0, 1);
   display();
 }
@@ -309,6 +326,7 @@ void init(char* filename) {
       shapes[num_shapes].g.point.x = x->valuedouble;
       shapes[num_shapes].g.point.y = x->next->valuedouble;
       shapes[num_shapes].g.point.z = x->next->next->valuedouble;
+      updateBBox(shapes[num_shapes].g.point);
       num_shapes++;
     }
     line = cJSON_GetObjectItem(item, "line");
@@ -324,6 +342,8 @@ void init(char* filename) {
       shapes[num_shapes].g.line.end.x = x2->valuedouble;
       shapes[num_shapes].g.line.end.y = x2->next->valuedouble;
       shapes[num_shapes].g.line.end.z = x2->next->next->valuedouble;
+      updateBBox(shapes[num_shapes].g.line.start);
+      updateBBox(shapes[num_shapes].g.line.end);
       num_shapes++;
     }
   }
