@@ -399,6 +399,9 @@ void init(char* filename) {
   for (i = 0; i < 256; i++) {
     xfer[i].r = xfer[i].g = xfer[i].b = 0.1 + i*0.9/256;
   }
+
+  // Move camera back to see entire model
+  camera_distance = (bounding_box[1].z - bounding_box[0].z) * 0.5 / tan(FOV_DEGREES * 0.5 * M_PI / 180);
 }
 
 int main(int argc, char** argv) {
@@ -415,6 +418,7 @@ int main(int argc, char** argv) {
   source = opc_new_source(port);
 
   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
+  glutInitWindowSize(800, 600);
   glutCreateWindow("OPC");
   glutReshapeFunc(reshape);
   glutDisplayFunc(display);
