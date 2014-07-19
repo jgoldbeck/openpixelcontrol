@@ -1,13 +1,18 @@
 var striptypes = [
-	{ direction: "cw", level: "middle", p0: [0.016, 0.855, 4.143], p1: [-0.82, 0.254, 7.713], pixels: 113 },
-	{ direction: "ccw", level: "middle", p0: [0.016, 0.855, 4.143], p1: [0.824, 0.238, 7.702], pixels: 113 },
-	{ direction: "cw", level: "top", p0: [0.582, 0.607, 7.788], p1: [0.552, 0.956, 8.961], pixels: 40 },
-	{ direction: "ccw", level: "top", p0: [0.607, 0.582, 7.788], p1: [0.956, 0.552, 8.961], pixels: 40 },
+    { group: "base-blast", p0: [0.141, 1.062, 4.062], quad: [[0.052, 0.862, 3.986], [0.02, 1.788, 0], [0.314, 1.73, 0], [0.23, 0.862, 3.986]], pixels: 1, radialrepeat: 36 },
+	{ group: "middle-cw", p0: [0.016, 0.855, 4.143], p1: [-0.82, 0.254, 7.713], pixels: 113, radialrepeat: 12 },
+	{ group: "middle-ccw", p0: [0.016, 0.855, 4.143], p1: [0.824, 0.238, 7.702], pixels: 113, radialrepeat: 12 },
+	{ group: "top-cw", p0: [0.582, 0.607, 7.788], p1: [0.552, 0.956, 8.961], pixels: 40, radialrepeat: 12 },
+	{ group: "top-ccw", p0: [0.607, 0.582, 7.788], p1: [0.956, 0.552, 8.961], pixels: 40, radialrepeat: 12 },
+    /*
+    { group: "railing-cove", p0: [0, 0, 0], p1: [0, 0, 0], quad: [[0,0,0], [0,0,0], [0,0,0], [0,0,0]], pixels: 1, radialrepeat: 12 },
+	{ group: "roofline", p0: [0, 0, 0], p1: [0, 0, 0], pixels: 70, radialrepeat: 6 },
+	*/
+	{ group: "spire-outer", p0: [0, 0.159, 13.761], pixels: 1, radialrepeat: 30, zrepeat: 16 },
+	{ group: "spire-inner", p0: [0, 0.079, 13.761], pixels: 1, radialrepeat: 15, zrepeat: 16 } 
 ];
 
 var center = [0, 0, 0];
-
-var r_step = Math.PI / 6;
 
 var points = [];
 
@@ -29,22 +34,39 @@ function rotate(v, r, center) {
 	return [dn[0] + center[0], dn[1] + center[1], dn[2] + center[2]];
 }
 
-for (var tt = 0; tt < 4; tt++) {
-	for (var ii = 0; ii < 12; ii++) {
-		var type = striptypes[tt];
-		var r = r_step * ii;
-		var p0 = rotate(type.p0, r, center);
-		var p1 = rotate(type.p1, r, center);
+for (var tt = 0; tt < striptypes.length; tt++) {
+	var type = striptypes[tt];
+	var rrepeat = type.radialrepeat ? type.radialrepeat : 1;
+	var zrepeat = type.zrepeat ? type.zrepeat : 1;
 
-		for (var pp = 0; pp < type.pixels; pp++) {
+	for (var zz = 0; zz < zrepeat; zz++) {
+		for (var ii = 0; ii < rrepeat; ii++) {
+			var r = ii * Math.PI * 2 / type.radialrepeat;
+			var p0 = rotate(type.p0, r, center);
+			for (var pp = 0; pp < type.pixels; pp++) {
+				var p;
+				if ("p1" in type) {
+					var p1 = rotate(type.p1, r, center);
+					p = lerp3(p0, p1, pp / type.pixels);
+				} else {
+					p = p0;
+				}
+				p[2] = p[2] + 0.15 * zz;
+				var item = {
+					point: p,
+					group: type.group
+				};
+				if ("quad" in type) {
+					item.quad = [
+						rotate(type.quad[0], r, center),
+						rotate(type.quad[1], r, center),
+						rotate(type.quad[2], r, center),
+						rotate(type.quad[3], r, center),
+					];
+				}
 
-			var p = lerp3(p0, p1, pp / type.pixels);
-			points.push({
-				point: p,
-				direction: type.direction,
-				level: type.level,
-				id: ii * tt * pp + 1
-			});
+				points.push(item);
+			}
 		}
 	}
 }
