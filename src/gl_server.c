@@ -124,6 +124,7 @@ typedef struct shape {
   union {
     vector point;
     struct { vector start, end; } line;
+    struct { vector p0, p1, p2, p3; } quad;
   } g;
 } shape;
 
@@ -156,6 +157,19 @@ void draw_line(shape* this, GLUquadric* quad) {
   gluCylinder(quad, SHAPE_THICKNESS/2, SHAPE_THICKNESS/2, len, 6, 1);
   glTranslated(0, 0, len);
   gluSphere(quad, SHAPE_THICKNESS/2, 6, 3);
+  glPopMatrix();
+}
+
+void draw_quad(shape* this, GLUquadric* quad) {
+  pixel p = pixels[this->index];
+  glColor3d(xfer[p.r].r, xfer[p.g].g, xfer[p.b].b);
+  glPushMatrix();
+  glBegin(GL_QUADS);
+  glVertex3f(this->g.quad.p0.x, this->g.quad.p0.y, this->g.quad.p0.z);
+  glVertex3f(this->g.quad.p1.x, this->g.quad.p1.y, this->g.quad.p1.z);
+  glVertex3f(this->g.quad.p2.x, this->g.quad.p2.y, this->g.quad.p2.z);
+  glVertex3f(this->g.quad.p3.x, this->g.quad.p3.y, this->g.quad.p3.z);
+  glEnd();
   glPopMatrix();
 }
 
@@ -306,6 +320,9 @@ void init(char* filename) {
   cJSON* line;
   cJSON* start;
   cJSON* x2;
+  cJSON* quad;
+  cJSON* x3;
+  cJSON* x4;
   int i = 0;
   
   buffer = read_file(filename);
@@ -344,6 +361,34 @@ void init(char* filename) {
       shapes[num_shapes].g.line.end.z = x2->next->next->valuedouble;
       updateBBox(shapes[num_shapes].g.line.start);
       updateBBox(shapes[num_shapes].g.line.end);
+      num_shapes++;
+    }
+    quad = cJSON_GetObjectItem(item, "quad");
+    start = quad ? quad->child : NULL;
+    x = start ? start->child : NULL;
+    x2 = x && start->next ? start->next->child : NULL;
+    x3 = x2 && start->next->next ? start->next->next->child : NULL;
+    x4 = x3 && start->next->next->next ? start->next->next->next->child : NULL;
+    if (x && x->next && x->next->next && x2 && x2->next && x2->next->next && 
+        x3 && x3->next && x3->next->next && x4 && x4->next && x4->next->next) {
+      shapes[num_shapes].draw = draw_quad;
+      shapes[num_shapes].index = i;
+      shapes[num_shapes].g.quad.p0.x = x->valuedouble;
+      shapes[num_shapes].g.quad.p0.y = x->next->valuedouble;
+      shapes[num_shapes].g.quad.p0.z = x->next->next->valuedouble;
+      shapes[num_shapes].g.quad.p1.x = x2->valuedouble;
+      shapes[num_shapes].g.quad.p1.y = x2->next->valuedouble;
+      shapes[num_shapes].g.quad.p1.z = x2->next->next->valuedouble;
+      shapes[num_shapes].g.quad.p2.x = x3->valuedouble;
+      shapes[num_shapes].g.quad.p2.y = x3->next->valuedouble;
+      shapes[num_shapes].g.quad.p2.z = x3->next->next->valuedouble;
+      shapes[num_shapes].g.quad.p3.x = x4->valuedouble;
+      shapes[num_shapes].g.quad.p3.y = x4->next->valuedouble;
+      shapes[num_shapes].g.quad.p3.z = x4->next->next->valuedouble;
+      updateBBox(shapes[num_shapes].g.quad.p0);
+      updateBBox(shapes[num_shapes].g.quad.p1);
+      updateBBox(shapes[num_shapes].g.quad.p2);
+      updateBBox(shapes[num_shapes].g.quad.p3);
       num_shapes++;
     }
   }
