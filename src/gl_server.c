@@ -414,7 +414,7 @@ int main(int argc, char** argv) {
   port = port ? port : OPC_DEFAULT_PORT;
   source = opc_new_source(port);
 
-  glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+  glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
   glutCreateWindow("OPC");
   glutReshapeFunc(reshape);
   glutDisplayFunc(display);
@@ -425,6 +425,8 @@ int main(int argc, char** argv) {
   glutIdleFunc(idle);
 
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_MULTISAMPLE);
+
 #ifdef __APPLE__
   /* Make glutSwapBuffers wait for vertical refresh to avoid frame tearing. */
   int swap_interval = 1;
