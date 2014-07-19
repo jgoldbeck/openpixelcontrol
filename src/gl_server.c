@@ -419,7 +419,11 @@ int main(int argc, char** argv) {
 
   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
   glutInitWindowSize(800, 600);
-  glutCreateWindow("OPC");
+
+  char title[100];
+  snprintf(title, 100, "OpenPixelControl - %s", argv[1]);
+  glutCreateWindow(title);
+
   glutReshapeFunc(reshape);
   glutDisplayFunc(display);
   glutMouseFunc(mouse);
