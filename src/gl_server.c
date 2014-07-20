@@ -39,6 +39,8 @@ double camera_elevation = -15;  // camera elevation angle, degrees
 double camera_distance = 16.0;  // distance from origin, metres
 double camera_aspect = 1.0;  // will be updated to match window aspect ratio
 
+int show_axes = 1;
+
 // Shape parameters
 #define SHAPE_THICKNESS 0.06  // thickness of points and lines, metres
 
@@ -201,7 +203,8 @@ void display() {
   shape* sh;
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  draw_axes();
+  if (show_axes)
+    draw_axes();
   GLUquadric* quad = gluNewQuadric();
   for (i = 0, sh = shapes; i < num_shapes; i++, sh++) {
     sh->draw(sh, quad);
@@ -268,6 +271,7 @@ void motion(int x, int y) {
 
 void keyboard(unsigned char key, int x, int y) {
   if (key == '\x1b' || key == 'q') exit(0);
+  if (key == 'a') show_axes = 0;
 }
 
 void handler(u8 channel, u16 count, pixel* p) {
