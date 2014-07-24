@@ -128,6 +128,7 @@ typedef struct shape {
     struct { vector start, end; } line;
     struct { vector p0, p1, p2, p3; } quad;
   } g;
+  double size;
 } shape;
 
 #define MAX_SHAPES 30000
@@ -139,7 +140,8 @@ void draw_point(shape* this, GLUquadric* quad) {
   glColor3d(xfer[p.r].r, xfer[p.g].g, xfer[p.b].b);
   glPushMatrix();
   glTranslatef(this->g.point.x, this->g.point.y, this->g.point.z);
-  gluSphere(quad, SHAPE_THICKNESS/2, 6, 3);
+  int sides = floor(this->size * 50);
+  gluSphere(quad, (this->size)/2, sides, sides);
   glPopMatrix();
 }
 
@@ -327,6 +329,7 @@ void init(char* filename) {
   cJSON* quad;
   cJSON* x3;
   cJSON* x4;
+  cJSON* size;
   int i = 0;
   
   buffer = read_file(filename);
@@ -348,6 +351,8 @@ void init(char* filename) {
       shapes[num_shapes].g.point.y = x->next->valuedouble;
       shapes[num_shapes].g.point.z = x->next->next->valuedouble;
       updateBBox(shapes[num_shapes].g.point);
+      size = cJSON_GetObjectItem(item, "size");
+      shapes[num_shapes].size = size ? size->valuedouble : SHAPE_THICKNESS;
       num_shapes++;
     }
     line = cJSON_GetObjectItem(item, "line");
