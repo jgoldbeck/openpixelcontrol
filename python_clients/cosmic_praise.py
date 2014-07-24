@@ -83,10 +83,11 @@ class MidiInputHandler(object):
         if num_bytes >= 3:
             data2 = event[2]
 
-        events.append( (channel, data1, data2, time.time()) )
+        if status == 0x90: # note on
+            events.append( (channel, data1, data2, time.time()) )
 
 try:
-    midiin, port_name = open_midiport(None, use_virtual=True)
+    midiin, port_name = open_midiport("USB Uno MIDI Interface", use_virtual=True)
 except (EOFError, KeyboardInterrupt):
     print "Error opening MIDI port"
     sys.exit()
@@ -105,16 +106,26 @@ print
 coordinates = []
 groups = {}
 
+def recordCoordinate(p):
+    x, y, z = p
+    theta = math.atan2(y, x)
+    r = math.sqrt(x * x + y * y)
+    xr = math.cos(theta)
+    yr = math.sin(theta)
+
+    coordinates.append(tuple(p + [theta, r, xr, yr]))
+
+
 for item in json.load(open(options.layout)):
     if 'point' in item:
-        coordinates.append(tuple(item['point']))
+        recordCoordinate(item['point'])
     if 'quad' in item:
-        coordinates.append(tuple(item['quad'][0]))
+        recordCoordinate(item['quad'][0])
     if 'group' in item:
         if not item['group'] in groups:
             groups[item['group']] = []
         groups[item['group']].append(len(coordinates)-1)
-    
+
 
 #-------------------------------------------------------------------------------
 # connect to server
@@ -172,12 +183,17 @@ def cylinderDistanceSquared(r0, theta0, z0, r1, theta1, z1):
     v = (x1 - x0, y1 - y0, z1 - z0)
     return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 
+def cartesianToCylinderDistanceSquared(x0, y0, z0, r1, theta1, z1):
+    x1 = r1 * math.cos(theta1)
+    y1 = r1 * math.sin(theta1)
+    v = (x1 - x0, y1 - y0, z1 - z0)
+    return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 
 class CosmicRay(object):
     def __init__(self):
         self.theta = random.random() * math.pi * 2
         self.z = 14.5;
-        self.velocity = -(1.8 + random.random() * 1.8)
+        self.velocity = -(2.8 + random.random() * 1.8)
         self.rotation = 1.2 * random.random() * (1 if random.random() > 0.5 else -1);
         self.size = 0.05 + 0.05 * random.random()
         self.lastUpdate = time.time()
@@ -193,8 +209,8 @@ rays = []
 
 def updateRays(events, frame_time):
 
-    if random.random() < 1/8:
-        events.append("foo")
+    #if random.random() < 1/8:
+    #    events.append("foo")
 
     while len(events):
         e = events.pop()
@@ -206,35 +222,28 @@ def updateRays(events, frame_time):
             rays.remove(ray)
 
 def rays_color(t, coord, ii, n_pixels, random_values, accum):
-    x, y, z, = coord
-    theta = math.atan2(y, x)
-
+    x, y, z, theta, r, xr, yr = coord
     light = 0
 
     for ray in rays:
-        d = cylinderDistanceSquared(1.0, ray.theta, ray.z, 1.0, theta, z)
+        d = cartesianToCylinderDistanceSquared(xr, yr, z, 1.0, ray.theta, ray.z)
         if d < ray.size:
             light += (ray.size - d) / ray.size
     
-    c = scaledRGBTupleToHSL(miami_color(t, coord, ii, n_pixels, random_values))
-    c.hsl_l += light * 3
-    c.hsl_s = 1 - light
-    return HSLToScaledRGBTuple(c)
+    rgb = miami_color(t, coord, ii, n_pixels, random_values, accum)
+    return (rgb[0] + light * 255, rgb[1] + light * 255, rgb[2] + light * 255)
 
-def miami_color(t, coord, ii, n_pixels, random_values):
+def miami_color(t, coord, ii, n_pixels, random_values, accum):
     # make moving stripes for x, y, and z
-    x, y, z = coord
+    x, y, z, theta, r, xr, yr = coord
     y += color_utils.cos(x - 0.2*z, offset=0, period=1, minn=0, maxx=0.6)
     z += color_utils.cos(x, offset=0, period=1, minn=0, maxx=0.3)
     x += color_utils.cos(y - z, offset=0, period=1.5, minn=0, maxx=0.2)
 
-    # rotate
-    x, y, z = y, z, x
-
     # make x, y, z -> r, g, b sine waves
-    r = color_utils.cos(x, offset=t / 16, period=2.5, minn=0, maxx=1)
-    g = color_utils.cos(y, offset=t / 16, period=2.5, minn=0, maxx=1)
-    b = color_utils.cos(-z, offset=t / 16, period=2.5, minn=0, maxx=1)
+    r = color_utils.cos(y, offset=t / 16, period=2.5, minn=0, maxx=1)
+    g = color_utils.cos(z, offset=t / 16, period=2.5, minn=0, maxx=1)
+    b = color_utils.cos(-x, offset=t / 16, period=2.5, minn=0, maxx=1)
     r, g, b = color_utils.contrast((r, g, b), 0.5, 1.4)
 
     clampdown = (r + g + b)/2
@@ -255,37 +264,39 @@ def miami_color(t, coord, ii, n_pixels, random_values):
 print '    sending pixels forever (control-c to exit)...'
 print
 
-n_pixels = len(coordinates)
-random_values = [random.random() for ii in range(n_pixels)]
-start_time = time.time()
-accum = 0
-while True:
-    frame_time = time.time()
-    t = frame_time - start_time
+def main():
+    n_pixels = len(coordinates)
+    random_values = [random.random() for ii in range(n_pixels)]
+    start_time = time.time()
+    accum = 0
+    while True:
+        try:
+            frame_time = time.time()
+            t = frame_time - start_time
 
-    updateRays(events, frame_time)
-    pixels = [rays_color(t*0.6, coord, ii, n_pixels, random_values, accum) for ii, coord in enumerate(coordinates)]
+            updateRays(events, frame_time)
+            pixels = [rays_color(t*0.6, coord, ii, n_pixels, random_values, accum) for ii, coord in enumerate(coordinates)]
 
-    for index in groups['railing']:
-        hsl = scaledRGBTupleToHSL(pixels[index])
-        hsl.hsl_s = 0.7
-        hsl.hsl_l = 0.3 + 0.4 * hsl.hsl_l
-        hsl.hsl_h = 320 + 40 * hsl.hsl_h / 360;
-        pixels[index] = HSLToScaledRGBTuple(hsl)
+            for index in groups['railing']:
+                hsl = scaledRGBTupleToHSL(pixels[index])
+                hsl.hsl_s = 0.7
+                hsl.hsl_l = 0.3 + 0.4 * hsl.hsl_l
+                hsl.hsl_h = 320 + 40 * hsl.hsl_h / 360;
+                pixels[index] = HSLToScaledRGBTuple(hsl)
 
-    for index in groups['base']:
-        hsl = scaledRGBTupleToHSL(pixels[index])
-        hsl.hsl_s = 0.7
-        hsl.hsl_l = 0.3 + 0.4 * hsl.hsl_l
-        hsl.hsl_h = 280 + 60 * hsl.hsl_h / 360;
-        pixels[index] = HSLToScaledRGBTuple(hsl)
+            for index in groups['base']:
+                hsl = scaledRGBTupleToHSL(pixels[index])
+                hsl.hsl_s = 0.7
+                hsl.hsl_l = 0.3 + 0.4 * hsl.hsl_l
+                hsl.hsl_h = 280 + 60 * hsl.hsl_h / 360;
+                pixels[index] = HSLToScaledRGBTuple(hsl)
 
-#    trigger = False
-#    if len(events) and events[-1][3] > (frame_time - 0.125):
-#        trigger = True
-#    pixels = [test_color(t*0.6, coord, ii, n_pixels, random_values, accum, trigger) for ii, coord in enumerate(coordinates)]
-#    accum = accum + 0.0001 * ( 1.0 + 80.0 * math.pow(math.sin(t/10), 3.0))
+            client.put_pixels(pixels, channel=0)
+            time.sleep(1 / options.fps)
 
-    client.put_pixels(pixels, channel=0)
-    time.sleep(1 / options.fps)
+        except KeyboardInterrupt:
+            return
 
+import cProfile
+cProfile.run("main()")
+#main()
