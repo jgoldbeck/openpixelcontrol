@@ -10,6 +10,7 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License. */
 
 #include <math.h>
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +38,8 @@ double orbit_angle = 192.0;  // camera orbit angle, degrees
 double camera_elevation = -15;  // camera elevation angle, degrees
 double camera_distance = 16.0;  // distance from origin, metres
 double camera_aspect = 1.0;  // will be updated to match window aspect ratio
+
+int show_axes = 1;
 
 // Shape parameters
 #define SHAPE_THICKNESS 0.06  // thickness of points and lines, metres
@@ -105,6 +108,17 @@ vector cross(vector v, vector w) {
   return result;
 }
 
+vector bounding_box[2] = { { DBL_MAX, DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX, -DBL_MAX } };
+
+void updateBBox(vector v) {
+  bounding_box[0].x = fmin(bounding_box[0].x, v.x);
+  bounding_box[0].y = fmin(bounding_box[0].y, v.y);
+  bounding_box[0].z = fmin(bounding_box[0].z, v.z);
+  bounding_box[1].x = fmax(bounding_box[1].x, v.x);
+  bounding_box[1].y = fmax(bounding_box[1].y, v.y);
+  bounding_box[1].z = fmax(bounding_box[1].z, v.z);
+}
+
 // Shapes
 typedef struct shape {
   void (*draw)(struct shape* this, GLUquadric* quad);
@@ -112,7 +126,9 @@ typedef struct shape {
   union {
     vector point;
     struct { vector start, end; } line;
+    struct { vector p0, p1, p2, p3; } quad;
   } g;
+  double size;
 } shape;
 
 #define MAX_SHAPES 30000
@@ -124,7 +140,8 @@ void draw_point(shape* this, GLUquadric* quad) {
   glColor3d(xfer[p.r].r, xfer[p.g].g, xfer[p.b].b);
   glPushMatrix();
   glTranslatef(this->g.point.x, this->g.point.y, this->g.point.z);
-  gluSphere(quad, SHAPE_THICKNESS/2, 6, 3);
+  int sides = floor(this->size * 50);
+  gluSphere(quad, (this->size)/2, sides, sides);
   glPopMatrix();
 }
 
@@ -144,6 +161,19 @@ void draw_line(shape* this, GLUquadric* quad) {
   gluCylinder(quad, SHAPE_THICKNESS/2, SHAPE_THICKNESS/2, len, 6, 1);
   glTranslated(0, 0, len);
   gluSphere(quad, SHAPE_THICKNESS/2, 6, 3);
+  glPopMatrix();
+}
+
+void draw_quad(shape* this, GLUquadric* quad) {
+  pixel p = pixels[this->index];
+  glColor3d(xfer[p.r].r, xfer[p.g].g, xfer[p.b].b);
+  glPushMatrix();
+  glBegin(GL_QUADS);
+  glVertex3f(this->g.quad.p0.x, this->g.quad.p0.y, this->g.quad.p0.z);
+  glVertex3f(this->g.quad.p1.x, this->g.quad.p1.y, this->g.quad.p1.z);
+  glVertex3f(this->g.quad.p2.x, this->g.quad.p2.y, this->g.quad.p2.z);
+  glVertex3f(this->g.quad.p3.x, this->g.quad.p3.y, this->g.quad.p3.z);
+  glEnd();
   glPopMatrix();
 }
 
@@ -175,7 +205,8 @@ void display() {
   shape* sh;
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  draw_axes();
+  if (show_axes)
+    draw_axes();
   GLUquadric* quad = gluNewQuadric();
   for (i = 0, sh = shapes; i < num_shapes; i++, sh++) {
     sh->draw(sh, quad);
@@ -192,7 +223,12 @@ void update_camera() {
   glLoadIdentity();
   double camera_y = -cos(camera_elevation*M_PI/180)*camera_distance;
   double camera_z = sin(camera_elevation*M_PI/180)*camera_distance;
-  gluLookAt(0, camera_y, camera_z, /* target */ 0, 0, 0, /* up */ 0, 0, 1);
+
+  double target_x = (bounding_box[0].x + bounding_box[1].x) * 0.5; 
+  double target_y = (bounding_box[0].y + bounding_box[1].y) * 0.5; 
+  double target_z = (bounding_box[0].z + bounding_box[1].z) * 0.5; 
+
+  gluLookAt(0, camera_y, camera_z, target_x, target_y, target_z, /* up */ 0, 0, 1);
   glRotatef(orbit_angle, 0, 0, 1);
   display();
 }
@@ -237,6 +273,7 @@ void motion(int x, int y) {
 
 void keyboard(unsigned char key, int x, int y) {
   if (key == '\x1b' || key == 'q') exit(0);
+  if (key == 'a') show_axes = 0;
 }
 
 void handler(u8 channel, u16 count, pixel* p) {
@@ -289,6 +326,10 @@ void init(char* filename) {
   cJSON* line;
   cJSON* start;
   cJSON* x2;
+  cJSON* quad;
+  cJSON* x3;
+  cJSON* x4;
+  cJSON* size;
   int i = 0;
   
   buffer = read_file(filename);
@@ -309,6 +350,9 @@ void init(char* filename) {
       shapes[num_shapes].g.point.x = x->valuedouble;
       shapes[num_shapes].g.point.y = x->next->valuedouble;
       shapes[num_shapes].g.point.z = x->next->next->valuedouble;
+      updateBBox(shapes[num_shapes].g.point);
+      size = cJSON_GetObjectItem(item, "size");
+      shapes[num_shapes].size = size ? size->valuedouble : SHAPE_THICKNESS;
       num_shapes++;
     }
     line = cJSON_GetObjectItem(item, "line");
@@ -324,6 +368,36 @@ void init(char* filename) {
       shapes[num_shapes].g.line.end.x = x2->valuedouble;
       shapes[num_shapes].g.line.end.y = x2->next->valuedouble;
       shapes[num_shapes].g.line.end.z = x2->next->next->valuedouble;
+      updateBBox(shapes[num_shapes].g.line.start);
+      updateBBox(shapes[num_shapes].g.line.end);
+      num_shapes++;
+    }
+    quad = cJSON_GetObjectItem(item, "quad");
+    start = quad ? quad->child : NULL;
+    x = start ? start->child : NULL;
+    x2 = x && start->next ? start->next->child : NULL;
+    x3 = x2 && start->next->next ? start->next->next->child : NULL;
+    x4 = x3 && start->next->next->next ? start->next->next->next->child : NULL;
+    if (x && x->next && x->next->next && x2 && x2->next && x2->next->next && 
+        x3 && x3->next && x3->next->next && x4 && x4->next && x4->next->next) {
+      shapes[num_shapes].draw = draw_quad;
+      shapes[num_shapes].index = i;
+      shapes[num_shapes].g.quad.p0.x = x->valuedouble;
+      shapes[num_shapes].g.quad.p0.y = x->next->valuedouble;
+      shapes[num_shapes].g.quad.p0.z = x->next->next->valuedouble;
+      shapes[num_shapes].g.quad.p1.x = x2->valuedouble;
+      shapes[num_shapes].g.quad.p1.y = x2->next->valuedouble;
+      shapes[num_shapes].g.quad.p1.z = x2->next->next->valuedouble;
+      shapes[num_shapes].g.quad.p2.x = x3->valuedouble;
+      shapes[num_shapes].g.quad.p2.y = x3->next->valuedouble;
+      shapes[num_shapes].g.quad.p2.z = x3->next->next->valuedouble;
+      shapes[num_shapes].g.quad.p3.x = x4->valuedouble;
+      shapes[num_shapes].g.quad.p3.y = x4->next->valuedouble;
+      shapes[num_shapes].g.quad.p3.z = x4->next->next->valuedouble;
+      updateBBox(shapes[num_shapes].g.quad.p0);
+      updateBBox(shapes[num_shapes].g.quad.p1);
+      updateBBox(shapes[num_shapes].g.quad.p2);
+      updateBBox(shapes[num_shapes].g.quad.p3);
       num_shapes++;
     }
   }
@@ -334,6 +408,9 @@ void init(char* filename) {
   for (i = 0; i < 256; i++) {
     xfer[i].r = xfer[i].g = xfer[i].b = 0.1 + i*0.9/256;
   }
+
+  // Move camera back to see entire model
+  camera_distance = (bounding_box[1].z - bounding_box[0].z) * 0.5 / tan(FOV_DEGREES * 0.5 * M_PI / 180);
 }
 
 int main(int argc, char** argv) {
@@ -349,8 +426,13 @@ int main(int argc, char** argv) {
   port = port ? port : OPC_DEFAULT_PORT;
   source = opc_new_source(port);
 
-  glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-  glutCreateWindow("OPC");
+  glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
+  glutInitWindowSize(800, 600);
+
+  char title[100];
+  snprintf(title, 100, "OpenPixelControl - %s", argv[1]);
+  glutCreateWindow(title);
+
   glutReshapeFunc(reshape);
   glutDisplayFunc(display);
   glutMouseFunc(mouse);
@@ -360,6 +442,8 @@ int main(int argc, char** argv) {
   glutIdleFunc(idle);
 
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_MULTISAMPLE);
+
 #ifdef __APPLE__
   /* Make glutSwapBuffers wait for vertical refresh to avoid frame tearing. */
   int swap_interval = 1;
