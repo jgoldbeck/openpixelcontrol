@@ -114,6 +114,15 @@ class Client(object):
             self.disconnect()
         return success
 
+    def safe_int(self, f):
+        i = int(f)
+        if i <= 0:
+            return 0
+        if i >= 255:
+            return 255
+        return i
+
+
     def put_pixels(self, pixels, channel=0):
         """Send the list of pixel colors to the OPC server on the given channel.
 
@@ -122,7 +131,7 @@ class Client(object):
             0 is a special value which means "all channels".
 
         pixels: A list of 3-tuples representing rgb colors.
-            Each value in the tuple should be in the range 0-255 inclusive. 
+            Each value in the tuple should be in the range 0-255 inclusive.
             For example: [(255, 255, 255), (0, 0, 0), (127, 0, 0)]
             Floats will be rounded down to integers.
             Values outside the legal range will be clamped.
@@ -148,10 +157,10 @@ class Client(object):
         len_lo_byte = (len(pixels)*3) % 256
         header = chr(channel) + chr(0) + chr(len_hi_byte) + chr(len_lo_byte)
         pieces = [header]
-        for r, g, b in pixels:
-            r = min(255, max(0, int(r)))
-            g = min(255, max(0, int(g)))
-            b = min(255, max(0, int(b)))
+        for index, (r, g, b) in enumerate(pixels):
+            r = self.safe_int(r)
+            g = self.safe_int(g)
+            b = self.safe_int(b)
             pieces.append(chr(r) + chr(g) + chr(b))
         message = ''.join(pieces)
 
